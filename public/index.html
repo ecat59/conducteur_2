@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion des Missions - Sélection Aléatoire</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: #181643; margin-bottom: 5px; }
+        .admin-badge { text-align: center; font-weight: bold; color: #28a745; margin-bottom: 25px; display: none; font-size: 14px; }
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1400px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; }
+        .card-title { font-size: 20px; font-weight: bold; color: #181643; margin-top: 0; margin-bottom: 15px; text-align: center; border-bottom: 2px solid #eef2ff; padding-bottom: 8px; }
+        .sub-section { margin-bottom: 15px; }
+        .admin-only { display: none; }
+        textarea { width: 100%; height: 80px; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; resize: none; font-size: 13px; }
+        button { color: white; border: none; padding: 10px 15px; font-size: 14px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.2s; margin-bottom: 8px; }
+        .btn-init { background-color: #28a745; }
+        .btn-init:hover { background-color: #218838; }
+        .btn-draw { background-color: #181643; padding: 12px; font-size: 15px; }
+        .btn-draw:hover { background-color: #27246a; }
+        .btn-reset { background-color: #dc3545; font-size: 12px; padding: 6px; }
+        .btn-reset:hover { background-color: #c82333; }
+        button:disabled { background-color: #cccccc !important; cursor: not-allowed; }
+        .result-box { text-align: center; background: #eef2ff; border: 2px dashed #181643; padding: 15px; border-radius: 6px; margin: 10px 0; min-height: 35px; display: flex; flex-direction: column; justify-content: center; }
+        .winner { font-size: 18px; font-weight: bold; color: #181643; word-break: break-word; }
+        .status { font-size: 12px; font-style: italic; color: #666; margin-top: 4px; }
+        .list-title { font-size: 13px; font-weight: bold; margin-bottom: 4px; margin-top: 8px; color: #555; }
+        .list-box { background: #fafafa; padding: 8px; border-radius: 4px; height: 80px; overflow-y: auto; font-size: 12px; border: 1px solid #eee; }
+        .remaining-item { color: #2c3e50; padding: 2px 0; }
+        .drawn-item { color: #7f8c8d; text-decoration: line-through; font-style: italic; padding: 2px 0; }
+        .error-box { color: #dc3545; font-size: 12px; font-weight: bold; text-align: center; min-height: 18px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>Sélection Aléatoire des Missions</h1>
+    <div id="admin-indicator" class="admin-badge">🔒 Mode Administrateur Activé</div>
+    
+    <div class="grid-container" id="modules-wrapper"></div>
+
+<script>
+    const categories = ["Billet CO", "Court Séjour", "Long Séjour", "Angleterre"];
+    const urlParams = new URLSearchParams(window.location.search);
+    const adminToken = urlParams.get('admin') || "";
+
+    window.onload = function() {
+        buildInterface();
+        updateAllStates();
+        setInterval(updateAllStates, 5000); // Actualisation automatique toutes les 5s
+    };
+
+    function buildInterface() {
+        const wrapper = document.getElementById('modules-wrapper');
+        if (adminToken) {
+            document.getElementById('admin-indicator').style.display = 'block';
+        }
+
+        wrapper.innerHTML = categories.map(name => {
+            const safeName = btoa(encodeURIComponent(name)).replace(/=/g, "");
+            const savedNames = localStorage.getItem('saved_' + name) || "";
+            
+            return `
+                <div class="card" id="card-${safeName}">
+                    <div class="card-title">${name}</div>
+                    
+                    <div class="sub-section admin-only">
+                        <textarea id="input-${safeName}" placeholder="Un nom par ligne...">${savedNames}</textarea>
+                        <button class="btn-init" id="btn-init-${safeName}" onclick="initList('${name}', '${safeName}')">Verrouiller la Liste</button>
+                    </div>
+
+                    <div class="sub-section">
+                        <button class="btn-draw" id="btn-draw-${safeName}" onclick="drawPerson('${name}', '${safeName}')" disabled>🎯 Tirer au sort</button>
+                        <div class="result-box">
+                            <div id="winner-${safeName}" class="winner">En attente...</div>
+                            <div id="status-${safeName}" class="status"></div>
+                        </div>
+                    </div>
+
+                    <div class="sub-section">
+                        <div class="list-title">⏳ Restants à piocher :</div>
+                        <div id="remaining-box-${safeName}" class="list-box">Aucun</div>
+                        <div class="list-title">✅ Déjà sélectionnés :</div>
+                        <div id="history-${safeName}" class="list-box">Aucun</div>
+                    </div>
+
+                    <div class="admin-only">
+                        <button class="btn-reset" id="btn-reset-${safeName}" onclick="resetList('${name}', '${safeName}')">Remettre à zéro la liste</button>
+                    </div>
+                    <div id="error-${safeName}" class="error-box"></div>
+                </div>
+            `;
+        }).join('');
+
+        if (adminToken) {
+            document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'block');
+        }
+    }
+
+    async function updateAllStates() {
+        try {
+            const response = await fetch('/api/states');
+            const states = await response.json();
+
+            states.forEach(state => {
+                const safeName = btoa(encodeURIComponent(state.name)).replace(/=/g, "");
+                const card = document.getElementById(`card-${safeName}`);
+                if (!card) return;
+
+                const input = document.getElementById(`input-${safeName}`);
+                const btnInit = document.getElementById(`btn-init-${safeName}`);
+                const btnDraw = document.getElementById(`btn-draw-${safeName}`);
+                const winnerDisplay = document.getElementById(`winner-${safeName}`);
+                const statusDisplay = document.getElementById(`status-${safeName}`);
+                const remainingBox = document.getElementById(`remaining-box-${safeName}`);
+                const historyDisplay = document.getElementById(`history-${safeName}`);
+
+                const hasList = state.initial_list.length > 0;
+                const isFinished = hasList && state.remaining_list.length === 0;
+
+                if(input) input.disabled = hasList;
+                if(btnInit) btnInit.disabled = hasList;
+                btnDraw.disabled = !hasList || isFinished;
+
+                if (hasList) {
+                    winnerDisplay.innerText = state.current_selection || "Prêt pour le premier tirage";
+                    statusDisplay.innerText = `Restant(s) : ${state.remaining_list.length} / Total : ${state.initial_list.length}`;
+                    
+                    if (state.remaining_list.length > 0) {
+                        const sortedRemaining = [...state.remaining_list].sort((a, b) => a.localeCompare(b));
+                        remainingBox.innerHTML = sortedRemaining.map(name => `<div class="remaining-item">👤 ${name}</div>`).join('');
+                    } else {
+                        remainingBox.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center; margin-top: 20px;">🎉 Liste terminée !</div>';
+                    }
+
+                    if (state.drawn_people.length > 0) {
+                        historyDisplay.innerHTML = state.drawn_people.map((name, i) => `<div class="drawn-item">${i + 1}. ${name}</div>`).join('');
+                    } else {
+                        historyDisplay.innerText = "Aucun";
+                    }
+                } else {
+                    winnerDisplay.innerText = "Aucune liste chargée";
+                    statusDisplay.innerText = "";
+                    remainingBox.innerText = "Aucune liste";
+                    historyDisplay.innerText = "Aucun";
+                    if (input && !input.value) {
+                        input.value = localStorage.getItem('saved_' + state.name) || "";
+                    }
+                }
+            });
+        } catch (err) {
+            console.error("Erreur de synchro");
+        }
+    }
+
+    async function initList(name, safeName) {
+        const text = document.getElementById(`input-${safeName}`).value;
+        const names = text.split('\n').filter(n => n.trim() !== "");
+        if (names.length === 0) return alert("Veuillez entrer des noms.");
+
+        localStorage.setItem('saved_' + name, text);
+
+        const response = await fetch(`/api/init/${encodeURIComponent(name)}`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'x-admin-token': adminToken
+            },
+            body: JSON.stringify({ names })
+        });
+
+        if (response.ok) updateAllStates();
+        else {
+            const data = await response.json();
+            document.getElementById(`error-${safeName}`).innerText = data.error;
+        }
+    }
+
+    async function drawPerson(name, safeName) {
+        const response = await fetch(`/api/draw/${encodeURIComponent(name)}`, { method: 'POST' });
+        if (response.ok) updateAllStates();
+    }
+
+    async function resetList(name, safeName) {
+        const response = await fetch(`/api/reset/${encodeURIComponent(name)}`, { 
+            method: 'POST',
+            headers: { 'x-admin-token': adminToken }
+        });
+        if (response.ok) updateAllStates();
+        else {
+            const data = await response.json();
+            document.getElementById(`error-${safeName}`).innerText = data.error;
+        }
+    }
+</script>
+</body>
+</html>
