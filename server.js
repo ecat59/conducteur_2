@@ -9,7 +9,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Configuration des clés de connexion Supabase
-const supabaseUrl = "https://h5yysrs0ozflzfm.supabase.co"; 
+const supabaseUrl = "https://zfgfqctidftrxibplnpm.supabase.co"; 
 const supabaseKey = "sb_publishable_H5YYSrS0ozFLZFMigudS3w_LINF6SkC";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
