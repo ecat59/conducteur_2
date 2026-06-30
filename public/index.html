@@ -46,7 +46,7 @@
     window.onload = function() {
         buildInterface();
         updateAllStates();
-        setInterval(updateAllStates, 3000); // Rafraîchissement toutes les 3 secondes pour plus de réactivité
+        setInterval(updateAllStates, 2000); // Rafraîchissement rapide toutes les 2 secondes
     };
 
     function buildInterface() {
@@ -115,45 +115,50 @@
                 const remainingBox = document.getElementById(`remaining-box-${safeName}`);
                 const historyDisplay = document.getElementById(`history-${safeName}`);
 
-                const hasList = state.initial_list && state.initial_list.length > 0;
-                const isFinished = hasList && state.remaining_list.length === 0;
+                // Vérifications strictes du contenu réel renvoyé par la base Supabase
+                const hasInitial = state.initial_list && Array.isArray(state.initial_list) && state.initial_list.length > 0;
+                const hasRemaining = state.remaining_list && Array.isArray(state.remaining_list) && state.remaining_list.length > 0;
+                
+                if(input) input.disabled = hasInitial;
+                if(btnInit) btnInit.disabled = hasInitial;
 
-                if(input) input.disabled = hasList;
-                if(btnInit) btnInit.disabled = hasList;
-                btnDraw.disabled = !hasList || isFinished;
+                // Le bouton tirage s'active UNIQUEMENT s'il y a des personnes restantes à piocher
+                btnDraw.disabled = !hasRemaining;
 
-                // Gestion de l'état du bouton reset
+                // Gestion de l'état du bouton rouge de Reset
                 if (btnReset) {
                     if (adminToken) {
-                        // L'admin peut réinitialiser si une liste existe (en cours ou finie)
-                        btnReset.disabled = !hasList; 
+                        btnReset.disabled = !hasInitial; // L'admin peut vider tant qu'une liste est chargée
                     } else {
-                        // Le manager peut uniquement si la liste est finie
-                        btnReset.disabled = !isFinished; 
+                        btnReset.disabled = !(hasInitial && !hasRemaining); // Le manager ne peut que si la liste est vide/terminée
                     }
                 }
 
-                if (hasList) {
-                    winnerDisplay.innerText = state.current_selection || "Prêt pour le premier tirage";
-                    statusDisplay.innerText = `Restant(s) : ${state.remaining_list.length} / Total : ${state.initial_list.length}`;
-                    
-                    if (state.remaining_list.length > 0) {
+                if (hasInitial) {
+                    if (hasRemaining) {
+                        winnerDisplay.innerText = state.current_selection || "Prêt pour le premier tirage";
+                        statusDisplay.innerText = `Restant(s) : ${state.remaining_list.length} / Total : ${state.initial_list.length}`;
+                        
                         const sortedRemaining = [...state.remaining_list].sort((a, b) => a.localeCompare(b));
                         remainingBox.innerHTML = sortedRemaining.map(name => `<div class="remaining-item">👤 ${name}</div>`).join('');
                     } else {
+                        // La liste est complètement épuisée
+                        winnerDisplay.innerText = "Sélection terminée !";
+                        statusDisplay.innerText = `Total pioché : ${state.initial_list.length}`;
                         remainingBox.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center; margin-top: 20px;">🎉 Liste terminée !</div>';
                     }
 
-                    if (state.drawn_people.length > 0) {
+                    // Historique des tirages
+                    if (state.drawn_people && state.drawn_people.length > 0) {
                         historyDisplay.innerHTML = state.drawn_people.map((name, i) => `<div class="drawn-item">${i + 1}. ${name}</div>`).join('');
                     } else {
                         historyDisplay.innerText = "Aucun";
                     }
                 } else {
-                    // C'EST ICI QUE ÇA CHANGE : Si la liste est vide (remise à zéro faite)
+                    // La liste a été remise à zéro, elle est totalement vide en base de données
                     winnerDisplay.innerText = "En attente d'une nouvelle liste...";
                     statusDisplay.innerText = "Aucun tirage actif";
-                    remainingBox.innerHTML = '<div style="color: #e67e22; font-style: italic; text-align: center; margin-top: 20px;">Vidée par le manager</div>';
+                    remainingBox.innerHTML = '<div style="color: #e67e22; font-style: italic; text-align: center; margin-top: 20px;">Prêt pour saisie Admin</div>';
                     historyDisplay.innerText = "Aucun";
                     if (input && !input.value) {
                         input.value = localStorage.getItem('saved_' + state.name) || "";
@@ -199,9 +204,8 @@
             method: 'POST',
             headers: { 'x-admin-token': adminToken }
         });
-        if (response.ok) {
-            updateAllStates();
-        } else {
+        if (response.ok) updateAllStates();
+        else {
             const data = await response.json();
             document.getElementById(`error-${safeName}`).innerText = data.error || "Erreur de droits";
         }
