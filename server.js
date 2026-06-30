@@ -10,7 +10,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Connexion directe à votre base Supabase
 const supabaseUrl = "https://zfgfqctidftrxibplnpm.supabase.co"; 
-const supabaseKey = "sb_secret_jakRt8TQUocfYR5givElfA_NIko4inN";
+const supabaseKey = "sb_publishable_H5YYSrS0ozFLZFMigudS3w_LINF6SkC";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_KEY = process.env.ADMIN_KEY || "admin123";
