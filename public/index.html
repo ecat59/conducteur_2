@@ -12,16 +12,19 @@
         .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: flex; flex-direction: column; justify-content: space-between; }
         .card-title { font-size: 20px; font-weight: bold; color: #181643; margin-top: 0; margin-bottom: 15px; text-align: center; border-bottom: 2px solid #eef2ff; padding-bottom: 8px; }
         .sub-section { margin-bottom: 15px; }
+        
+        /* Zone admin masquée par défaut */
         .admin-only { display: none; }
+        
         textarea { width: 100%; height: 80px; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; resize: none; font-size: 13px; }
         button { color: white; border: none; padding: 10px 15px; font-size: 14px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: background 0.2s; margin-bottom: 8px; }
         .btn-init { background-color: #28a745; }
         .btn-init:hover { background-color: #218838; }
         .btn-draw { background-color: #181643; padding: 12px; font-size: 15px; }
         .btn-draw:hover { background-color: #27246a; }
-        .btn-reset { background-color: #dc3545; font-size: 12px; padding: 6px; }
+        .btn-reset { background-color: #dc3545; font-size: 13px; padding: 8px; }
         .btn-reset:hover { background-color: #c82333; }
-        button:disabled { background-color: #cccccc !important; cursor: not-allowed; }
+        button:disabled { background-color: #cccccc !important; cursor: not-allowed; opacity: 0.6; }
         .result-box { text-align: center; background: #eef2ff; border: 2px dashed #181643; padding: 15px; border-radius: 6px; margin: 10px 0; min-height: 35px; display: flex; flex-direction: column; justify-content: center; }
         .winner { font-size: 18px; font-weight: bold; color: #181643; word-break: break-word; }
         .status { font-size: 12px; font-style: italic; color: #666; margin-top: 4px; }
@@ -47,7 +50,7 @@
     window.onload = function() {
         buildInterface();
         updateAllStates();
-        setInterval(updateAllStates, 5000); // Actualisation automatique toutes les 5s
+        setInterval(updateAllStates, 5000);
     };
 
     function buildInterface() {
@@ -84,8 +87,8 @@
                         <div id="history-${safeName}" class="list-box">Aucun</div>
                     </div>
 
-                    <div class="admin-only">
-                        <button class="btn-reset" id="btn-reset-${safeName}" onclick="resetList('${name}', '${safeName}')">Remettre à zéro la liste</button>
+                    <div>
+                        <button class="btn-reset" id="btn-reset-${safeName}" onclick="resetList('${name}', '${safeName}')" disabled>Remettre à zéro la liste</button>
                     </div>
                     <div id="error-${safeName}" class="error-box"></div>
                 </div>
@@ -110,6 +113,7 @@
                 const input = document.getElementById(`input-${safeName}`);
                 const btnInit = document.getElementById(`btn-init-${safeName}`);
                 const btnDraw = document.getElementById(`btn-draw-${safeName}`);
+                const btnReset = document.getElementById(`btn-reset-${safeName}`);
                 const winnerDisplay = document.getElementById(`winner-${safeName}`);
                 const statusDisplay = document.getElementById(`status-${safeName}`);
                 const remainingBox = document.getElementById(`remaining-box-${safeName}`);
@@ -121,6 +125,15 @@
                 if(input) input.disabled = hasList;
                 if(btnInit) btnInit.disabled = hasList;
                 btnDraw.disabled = !hasList || isFinished;
+
+                // RÈGLE DU BOUTON RESET : Activé si la liste est finie OU si on est Admin
+                if (btnReset) {
+                    if (adminToken) {
+                        btnReset.disabled = false; // L'admin peut toujours Reset
+                    } else {
+                        btnReset.disabled = !isFinished; // Le manager ne peut Reset QUE si c'est fini
+                    }
+                }
 
                 if (hasList) {
                     winnerDisplay.innerText = state.current_selection || "Prêt pour le premier tirage";
@@ -182,14 +195,17 @@
     }
 
     async function resetList(name, safeName) {
+        document.getElementById(`error-${safeName}`).innerText = "";
+        
         const response = await fetch(`/api/reset/${encodeURIComponent(name)}`, { 
             method: 'POST',
-            headers: { 'x-admin-token': adminToken }
+            headers: { 'x-admin-token': adminToken } // Transmet le token si présent
         });
+        
         if (response.ok) updateAllStates();
         else {
             const data = await response.json();
-            document.getElementById(`error-${safeName}`).innerText = data.error;
+            document.getElementById(`error-${safeName}`).innerText = data.error || "Erreur de droits";
         }
     }
 </script>
