@@ -8,9 +8,8 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Vos clés d'accès à mettre à jour avec votre clé 'anon / public' (commençant par eyJ)
-// Connexion sécurisée : le code va lire la clé directement dans la mémoire de Render
-const supabaseUrl = "https://h5yysrs0ozflzfm.supabase.co"; 
+// Connexion sécurisée via les variables d'environnement de Render
+const supabaseUrl = process.env.SUPABASE_URL; 
 const supabaseKey = process.env.SUPABASE_KEY; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -42,7 +41,7 @@ app.get('/api/states', async (req, res) => {
     }
 });
 
-// Initialisation par l'ADMIN (Verrouillage initial)
+// Initialisation de la liste source par l'ADMIN
 app.post('/api/init/:name', checkAdminToken, async (req, res) => {
     const { names } = req.body;
     if (!names || !Array.isArray(names) || names.length === 0) {
@@ -61,7 +60,7 @@ app.post('/api/init/:name', checkAdminToken, async (req, res) => {
     res.json({ success: true });
 });
 
-// Tirage au sort par le MANAGER ou l'ADMIN
+// Tirage au sort (Manager et Admin)
 app.post('/api/draw/:name', async (req, res) => {
     const { data: current, error: fetchErr } = await supabase.from('app_state').select('*').eq('name', req.params.name).single();
     if (fetchErr) return res.status(500).json({ error: fetchErr.message });
@@ -85,7 +84,7 @@ app.post('/api/draw/:name', async (req, res) => {
     res.json({ success: true });
 });
 
-// REMISE À ZÉRO INTELLIGENTE : Relance et reverrouille automatiquement la même liste
+// Remise à zéro automatique (Relance et reverrouille la même liste de départ)
 app.post('/api/reset/:name', async (req, res) => {
     const token = req.headers['x-admin-token'];
     const { data: current, error: fetchErr } = await supabase.from('app_state').select('*').eq('name', req.params.name).single();
@@ -100,16 +99,15 @@ app.post('/api/reset/:name', async (req, res) => {
         return res.status(403).json({ error: "Action refusée : La liste n'est pas encore terminée." });
     }
 
-    // Si pas de liste de départ, on ne peut rien faire
     if (!current.initial_list || current.initial_list.length === 0) {
         return res.status(400).json({ error: "Aucune liste de base à reverrouiller." });
     }
 
-    // LE CHANGEMENT EST ICI : On reprend la liste initiale, on la remélange et on RE-VERROUILLE direct !
+    // On reprend la liste initiale stockée, on la remélange et on recharge l'application
     const { error } = await supabase.from('app_state').update({
-        remaining_list: shuffle([...current.initial_list]), // On remélange la même liste
-        drawn_people: [],                                   // On vide les sélectionnés
-        current_selection: null                             // On remet le bandeau à zéro
+        remaining_list: shuffle([...current.initial_list]), 
+        drawn_people: [],                                   
+        current_selection: null                             
     }).eq('name', req.params.name);
 
     if (error) return res.status(500).json({ error: error.message });
