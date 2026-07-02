@@ -10,7 +10,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Vos clés d'accès à mettre à jour avec votre clé 'anon / public' (commençant par eyJ)
 const supabaseUrl = "https://h5yysrs0ozflzfm.supabase.co"; 
-const supabaseKey = "VOTRE_CLE_ANON_PUBLIC_ICI"; 
+const supabaseKey = "sb_publishable_H5YYSrS0ozFLZFMigudS3w_LINF6SkC"; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_KEY = process.env.ADMIN_KEY || "admin123";
