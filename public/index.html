@@ -46,7 +46,7 @@
     window.onload = function() {
         buildInterface();
         updateAllStates();
-        setInterval(updateAllStates, 2000); // Rafraîchissement rapide toutes les 2 secondes
+        setInterval(updateAllStates, 2000); 
     };
 
     function buildInterface() {
@@ -65,7 +65,7 @@
                     
                     <div class="sub-section admin-only">
                         <textarea id="input-${safeName}" placeholder="Un nom par ligne...">${savedNames}</textarea>
-                        <button class="btn-init" id="btn-init-${safeName}" onclick="initList('${name}', '${safeName}')">Verrouiller la Liste</button>
+                        <button class="btn-init" id="btn-init-${safeName}" onclick="initList('${name}', '${safeName}')">Changer la Liste Source</button>
                     </div>
 
                     <div class="sub-section">
@@ -84,7 +84,7 @@
                     </div>
 
                     <div>
-                        <button class="btn-reset" id="btn-reset-${safeName}" onclick="resetList('${name}', '${safeName}')" disabled>Remettre à zéro la liste</button>
+                        <button class="btn-reset" id="btn-reset-${safeName}" onclick="resetList('${name}', '${safeName}')" disabled>Remettre à zéro (Relancer la liste)</button>
                     </div>
                     <div id="error-${safeName}" class="error-box"></div>
                 </div>
@@ -115,22 +115,21 @@
                 const remainingBox = document.getElementById(`remaining-box-${safeName}`);
                 const historyDisplay = document.getElementById(`history-${safeName}`);
 
-                // Vérifications strictes du contenu réel renvoyé par la base Supabase
                 const hasInitial = state.initial_list && Array.isArray(state.initial_list) && state.initial_list.length > 0;
                 const hasRemaining = state.remaining_list && Array.isArray(state.remaining_list) && state.remaining_list.length > 0;
                 
-                if(input) input.disabled = hasInitial;
-                if(btnInit) btnInit.disabled = hasInitial;
+                // L'admin peut modifier la liste source uniquement si aucun tirage n'est en cours
+                if(input) input.disabled = hasRemaining;
+                if(btnInit) btnInit.disabled = hasRemaining;
 
-                // Le bouton tirage s'active UNIQUEMENT s'il y a des personnes restantes à piocher
+                // Le tirage est possible dès qu'il y a des personnes restantes
                 btnDraw.disabled = !hasRemaining;
 
-                // Gestion de l'état du bouton rouge de Reset
                 if (btnReset) {
                     if (adminToken) {
-                        btnReset.disabled = !hasInitial; // L'admin peut vider tant qu'une liste est chargée
+                        btnReset.disabled = !hasInitial; 
                     } else {
-                        btnReset.disabled = !(hasInitial && !hasRemaining); // Le manager ne peut que si la liste est vide/terminée
+                        btnReset.disabled = !(hasInitial && !hasRemaining); 
                     }
                 }
 
@@ -142,27 +141,21 @@
                         const sortedRemaining = [...state.remaining_list].sort((a, b) => a.localeCompare(b));
                         remainingBox.innerHTML = sortedRemaining.map(name => `<div class="remaining-item">👤 ${name}</div>`).join('');
                     } else {
-                        // La liste est complètement épuisée
                         winnerDisplay.innerText = "Sélection terminée !";
                         statusDisplay.innerText = `Total pioché : ${state.initial_list.length}`;
-                        remainingBox.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center; margin-top: 20px;">🎉 Liste terminée !</div>';
+                        remainingBox.innerHTML = '<div style="color: #28a745; font-weight: bold; text-align: center; margin-top: 20px;">🎉 Liste épuisée ! Cliquez sur Réinitialiser pour relancer</div>';
                     }
 
-                    // Historique des tirages
                     if (state.drawn_people && state.drawn_people.length > 0) {
                         historyDisplay.innerHTML = state.drawn_people.map((name, i) => `<div class="drawn-item">${i + 1}. ${name}</div>`).join('');
                     } else {
                         historyDisplay.innerText = "Aucun";
                     }
                 } else {
-                    // La liste a été remise à zéro, elle est totalement vide en base de données
-                    winnerDisplay.innerText = "En attente d'une nouvelle liste...";
-                    statusDisplay.innerText = "Aucun tirage actif";
-                    remainingBox.innerHTML = '<div style="color: #e67e22; font-style: italic; text-align: center; margin-top: 20px;">Prêt pour saisie Admin</div>';
+                    winnerDisplay.innerText = "Aucune liste configurée";
+                    statusDisplay.innerText = "En attente de l'administrateur";
+                    remainingBox.innerHTML = '<div style="color: #666; font-style: italic; text-align: center; margin-top: 20px;">Vide</div>';
                     historyDisplay.innerText = "Aucun";
-                    if (input && !input.value) {
-                        input.value = localStorage.getItem('saved_' + state.name) || "";
-                    }
                 }
             });
         } catch (err) {
@@ -207,7 +200,7 @@
         if (response.ok) updateAllStates();
         else {
             const data = await response.json();
-            document.getElementById(`error-${safeName}`).innerText = data.error || "Erreur de droits";
+            document.getElementById(`error-${safeName}`).innerText = data.error || "Erreur lors de la remise à zéro";
         }
     }
 </script>
