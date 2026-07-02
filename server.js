@@ -8,9 +8,9 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Connexion directe à votre base Supabase
-const supabaseUrl = "https://zfgfqctidftrxibplnpm.supabase.co"; 
-const supabaseKey = "sb_publishable_H5YYSrS0ozFLZFMigudS3w_LINF6SkC";
+// Vos clés d'accès à mettre à jour avec votre clé 'anon / public' (commençant par eyJ)
+const supabaseUrl = "https://h5yysrs0ozflzfm.supabase.co"; 
+const supabaseKey = "VOTRE_CLE_ANON_PUBLIC_ICI"; 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ADMIN_KEY = process.env.ADMIN_KEY || "admin123";
@@ -41,14 +41,8 @@ app.get('/api/states', async (req, res) => {
     }
 });
 
+// Initialisation par l'ADMIN (Verrouillage initial)
 app.post('/api/init/:name', checkAdminToken, async (req, res) => {
-    const { data: current } = await supabase.from('app_state').select('*').eq('name', req.params.name).single();
-    
-    // On autorise l'initialisation si aucune liste n'est active ou si l'ancienne est vide
-    if (current && current.initial_list && current.initial_list.length > 0 && current.remaining_list.length > 0) {
-        return res.status(403).json({ error: "La liste est déjà en cours et non terminée !" });
-    }
-
     const { names } = req.body;
     if (!names || !Array.isArray(names) || names.length === 0) {
         return res.status(400).json({ error: "La liste est vide." });
@@ -66,6 +60,7 @@ app.post('/api/init/:name', checkAdminToken, async (req, res) => {
     res.json({ success: true });
 });
 
+// Tirage au sort par le MANAGER ou l'ADMIN
 app.post('/api/draw/:name', async (req, res) => {
     const { data: current, error: fetchErr } = await supabase.from('app_state').select('*').eq('name', req.params.name).single();
     if (fetchErr) return res.status(500).json({ error: fetchErr.message });
@@ -89,22 +84,31 @@ app.post('/api/draw/:name', async (req, res) => {
     res.json({ success: true });
 });
 
+// REMISE À ZÉRO INTELLIGENTE : Relance et reverrouille automatiquement la même liste
 app.post('/api/reset/:name', async (req, res) => {
     const token = req.headers['x-admin-token'];
-    const { data: current } = await supabase.from('app_state').select('*').eq('name', req.params.name).single();
+    const { data: current, error: fetchErr } = await supabase.from('app_state').select('*').eq('name', req.params.name).single();
     
+    if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+
     const isUrlAdmin = (token && token === ADMIN_KEY);
     const isListEmpty = (current && current.initial_list && current.initial_list.length > 0 && current.remaining_list.length === 0);
 
+    // Sécurité : Seul l'admin peut reset en cours de route. Le manager doit attendre qu'elle soit vide.
     if (!isUrlAdmin && !isListEmpty) {
-        return res.status(403).json({ error: "Action refusée : Seul l'admin peut réinitialiser une liste en cours." });
+        return res.status(403).json({ error: "Action refusée : La liste n'est pas encore terminée." });
     }
 
+    // Si pas de liste de départ, on ne peut rien faire
+    if (!current.initial_list || current.initial_list.length === 0) {
+        return res.status(400).json({ error: "Aucune liste de base à reverrouiller." });
+    }
+
+    // LE CHANGEMENT EST ICI : On reprend la liste initiale, on la remélange et on RE-VERROUILLE direct !
     const { error } = await supabase.from('app_state').update({
-        initial_list: [],
-        remaining_list: [],
-        drawn_people: [],
-        current_selection: null
+        remaining_list: shuffle([...current.initial_list]), // On remélange la même liste
+        drawn_people: [],                                   // On vide les sélectionnés
+        current_selection: null                             // On remet le bandeau à zéro
     }).eq('name', req.params.name);
 
     if (error) return res.status(500).json({ error: error.message });
